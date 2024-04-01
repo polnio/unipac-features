@@ -1,0 +1,22 @@
+[lib]
+proc-macro = true
+
+[package]
+name = "unipac-macros"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+edition.workspace = true
+
+[dependencies]
+quote = "1.0.35"
+syn = { version = "2.0.52", features = ["printing", "extra-traits"] }
+unipac-core = { path = "../core" }
+
+[features]
+pacman = ["unipac-core/pacman"]
+aur = ["unipac-core/aur"]
+flatpak = ["unipac-core/flatpak"]
+snap = ["unipac-core/snap"]
+# git = ["unipac-core/git"]
+cargo = ["unipac-core/cargo"]

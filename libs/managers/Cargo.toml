@@ -1,0 +1,39 @@
+[package]
+name = "unipac-managers"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+edition.workspace = true
+
+[dependencies]
+alpm = { version = "2.2.3", optional = true }
+alpm-utils = { version = "2.0.1", optional = true }
+dirs = { version = "5.0.1", optional = true }
+flate2 = { version = "1.0.28", optional = true }
+glob-match = { version = "0.2.1", optional = true }
+once_cell = { version = "1.19.0", optional = true }
+pacmanconf = { version = "2.1.0", optional = true }
+raur = { version = "7.0.0", optional = true }
+regex = { version = "1.10.3", optional = true }
+reqwest = { version = "0.11.26", optional = true }
+semver = { version = "1.0.22", optional = true }
+serde = { version = "1.0.197", features = ["derive"], optional = true }
+serde_json = { version = "1.0.114", optional = true }
+tar = { version = "0.4.40", optional = true }
+tempfile = { version = "3.10.1", optional = true }
+tokio = { version = "1.36.0", features = ["sync"] }
+xdg = { version = "2.5.2", optional = true }
+
+[features]
+pacman = ["alpm", "dep:glob-match"]
+aur = ["alpm", "dep:raur", "dep:xdg", "dep:reqwest", "dep:flate2", "dep:tar"]
+flatpak = []
+snap = ["dep:once_cell", "dep:regex"]
+# git = []
+cargo = ["tokio/fs", "dep:dirs", "dep:serde", "dep:serde_json", "dep:reqwest", "dep:semver"]
+
+alpm = ["dep:alpm", "dep:alpm-utils", "dep:once_cell", "dep:pacmanconf", "dep:tempfile"]
+serde = ["dep:serde"]
+serde_json = ["dep:serde_json"]
+semver = ["dep:semver"]
+glob = []

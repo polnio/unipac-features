@@ -1,0 +1,9 @@
+[workspace]
+members = ["bins/*", "libs/*"]
+resolver = "2"
+
+[workspace.package]
+version = "0.0.1"
+authors = ["Po Co"]
+description = "An universal package manager"
+edition = "2021"
