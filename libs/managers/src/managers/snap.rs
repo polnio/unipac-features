@@ -114,8 +114,15 @@ impl super::Manager for Snap {
         Ok(())
     }
 
-    async fn uninstall(&self, _package: &Self::Package) -> Result<(), Self::Error> {
-        todo!()
+    async fn uninstall(&self, package: &Self::Package) -> Result<(), Self::Error> {
+        Command::new("snap")
+            .args(["remove", &package.name])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .and_then(|mut p| p.wait())
+            .map_err(|_| Error::Command)?;
+        Ok(())
     }
 
     async fn list_updates(&self) -> Result<Vec<Self::Package>, Self::Error> {
