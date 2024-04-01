@@ -1,12 +1,13 @@
-use dialoguer::Confirm;
 use unipac_managers::managers::*;
-use unipac_managers::utils::dirs::{download_and_extract_aur_archive, get_pkgbuild_path};
 
 #[cfg(feature = "pacman")]
 pub async fn pacman_pre_install(_package: &pacman::Package) {}
 
 #[cfg(feature = "aur")]
 pub async fn aur_pre_install(package: &aur::Package) {
+    use dialoguer::Confirm;
+    use unipac_managers::utils::dirs::{download_and_extract_aur_archive, get_pkgbuild_path};
+
     let result = download_and_extract_aur_archive(&package.name).await;
     if let Err(err) = result {
         eprintln!(

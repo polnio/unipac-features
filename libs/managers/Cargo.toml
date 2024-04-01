@@ -30,7 +30,7 @@ aur = ["alpm", "dep:raur", "dep:xdg", "dep:reqwest", "dep:flate2", "dep:tar"]
 flatpak = []
 snap = ["dep:once_cell", "dep:regex"]
 # git = []
-cargo = ["tokio/fs", "dep:dirs", "dep:serde", "dep:serde_json", "dep:reqwest", "dep:semver"]
+cargo = ["tokio/fs", "dep:dirs", "dep:serde", "dep:serde_json", "dep:reqwest", "reqwest/json", "dep:semver"]
 
 alpm = ["dep:alpm", "dep:alpm-utils", "dep:once_cell", "dep:pacmanconf", "dep:tempfile"]
 serde = ["dep:serde"]

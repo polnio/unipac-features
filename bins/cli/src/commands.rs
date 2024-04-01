@@ -12,7 +12,6 @@ use tabwriter::TabWriter;
 use unipac_macros::{for_all, for_all_attrs};
 use unipac_managers::managers::{self, Manager};
 
-#[cfg(feature = "aur")]
 #[for_all_attrs]
 #[derive(Default)]
 struct Packages {
@@ -31,7 +30,6 @@ impl Packages {
     }
 }
 
-#[cfg(feature = "aur")]
 #[for_all_attrs]
 #[derive(Default)]
 struct Package {

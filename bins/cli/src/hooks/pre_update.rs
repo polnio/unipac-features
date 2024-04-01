@@ -1,12 +1,13 @@
-use dialoguer::Confirm;
 use unipac_managers::managers::*;
-use unipac_managers::utils::dirs::{download_and_extract_aur_archive, get_pkgbuild_path};
 
 #[cfg(feature = "pacman")]
 pub async fn pacman_pre_update(_packages: &Vec<pacman::Package>) {}
 
 #[cfg(feature = "aur")]
 pub async fn aur_pre_update(packages: &Vec<aur::Package>) {
+    use dialoguer::Confirm;
+    use unipac_managers::utils::dirs::{download_and_extract_aur_archive, get_pkgbuild_path};
+
     if !packages.is_empty() {
         let handles = packages
             .iter()
