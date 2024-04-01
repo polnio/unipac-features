@@ -33,7 +33,3 @@ snap = ["dep:once_cell", "dep:regex"]
 cargo = ["tokio/fs", "dep:dirs", "dep:serde", "dep:serde_json", "dep:reqwest", "reqwest/json", "dep:semver"]
 
 alpm = ["dep:alpm", "dep:alpm-utils", "dep:once_cell", "dep:pacmanconf", "dep:tempfile"]
-serde = ["dep:serde"]
-serde_json = ["dep:serde_json"]
-semver = ["dep:semver"]
-glob = []
