@@ -21,8 +21,8 @@ impl From<raur::Package> for Package {
         }
     }
 }
-impl From<alpm::Package<'_>> for Package {
-    fn from(package: alpm::Package) -> Self {
+impl From<&alpm::Package> for Package {
+    fn from(package: &alpm::Package) -> Self {
         Self {
             name: package.name().into(),
             version: package.version().to_string(),
@@ -72,18 +72,7 @@ impl AUR {
         Self::create(None)
     }
     pub fn with_progress(progress_sender: Sender<u8>) -> Self {
-        let this = Self::create(Some(progress_sender.clone()));
-        tokio::task::spawn({
-            let alpm = this.alpm.clone();
-            async move {
-                println!("Starting watching");
-                while let Some(progress) = alpm.recv_progress().await {
-                    let _ = progress_sender.send(progress).await;
-                }
-                println!("Stopped watching");
-            }
-        });
-        this
+        Self::create(Some(progress_sender.clone()))
     }
 
     fn create(progress_sender: Option<Sender<u8>>) -> Self {
@@ -106,8 +95,7 @@ impl super::Manager for AUR {
         let packages = localdb
             .pkgs()
             .iter()
-            .filter(|pkg| !syncdbs.pkg(pkg.name()).is_ok())
-            .map(Package::from)
+            .filter_map(|pkg| (!syncdbs.pkg(pkg.name()).is_ok()).then(|| Package::from(pkg)))
             .collect();
         Ok(packages)
     }
@@ -178,9 +166,9 @@ impl super::Manager for AUR {
             ));
             let filename = filepath.to_str().ok_or(Error::Fs(None))?;
             let pkg = alpm.pkg_load(filename, true, alpm.local_file_siglevel())?;
-            alpm.trans_add_pkg(pkg).map_err(|err| err.err)?;
-            alpm.trans_prepare().map_err(|(_, err)| err)?;
-            alpm.trans_commit().map_err(|(_, err)| err)?;
+            alpm.trans_add_pkg(pkg).map_err(|err| err.error)?;
+            alpm.trans_prepare().map_err(|err| err.error())?;
+            alpm.trans_commit().map_err(|err| err.error())?;
             Ok(())
         };
         alpm.trans_release()?;
@@ -255,8 +243,7 @@ impl super::Manager for AUR {
                 }
                 alpm.syncdbs()
                     .iter()
-                    .find_map(|db| db.pkg(name).ok())
-                    .map(Package::from)
+                    .find_map(|db| db.pkg(name).ok().map(Package::from))
             })
             .collect();
 

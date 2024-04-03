@@ -15,17 +15,25 @@ pub struct Package {
     pub url: Option<String>,
     pub database: String,
 }
-impl Package {
-    fn from_alpm<D>(value: alpm::Package, database: D) -> Self
-    where
-        D: Into<String>,
-    {
+impl From<&alpm::Package> for Package {
+    fn from(value: &alpm::Package) -> Self {
         Self {
             name: value.name().into(),
             version: value.version().to_string(),
             description: value.desc().map(|desc| desc.into()),
             url: value.url().map(|url| url.into()),
-            database: database.into(),
+            database: value.db().map_or("unknown".into(), |db| db.name().into()),
+        }
+    }
+}
+impl From<&alpm::Pkg> for Package {
+    fn from(value: &alpm::Pkg) -> Self {
+        Self {
+            name: value.name().into(),
+            version: value.version().to_string(),
+            description: value.desc().map(|desc| desc.into()),
+            url: value.url().map(|url| url.into()),
+            database: value.db().map_or("unknown".into(), |db| db.name().into()),
         }
     }
 }
@@ -86,7 +94,7 @@ impl super::Manager for Pacman {
                 let Ok(pkg) = syncdbs.pkg(pkg.name()) else {
                     return None;
                 };
-                Some(Package::from_alpm(pkg, localdb.name()))
+                Some(pkg.into())
             })
             .collect();
         Ok(packages)
@@ -96,9 +104,7 @@ impl super::Manager for Pacman {
         let alpm = self.alpm.lock();
         let localdb = alpm.localdb();
         let syncdbs = alpm.syncdbs();
-        let package = localdb
-            .pkg(name)
-            .map(|pkg| Package::from_alpm(pkg, localdb.name()));
+        let package = localdb.pkg(name).map(Package::from);
         let Ok(package) = package else {
             return Ok(None);
         };
@@ -114,10 +120,7 @@ impl super::Manager for Pacman {
         let packages = syncdbs
             .iter()
             .flat_map(|db| match db.search([query].iter()) {
-                Ok(pkgs) => pkgs
-                    .iter()
-                    .map(|pkg| Ok(Package::from_alpm(pkg, db.name())))
-                    .collect(),
+                Ok(pkgs) => pkgs.iter().map(|pkg| Ok(Package::from(pkg))).collect(),
                 Err(err) => vec![Err(err.into())],
             })
             .collect();
@@ -133,7 +136,7 @@ impl super::Manager for Pacman {
             for db in syncdbs.iter() {
                 if let Ok(pkg) = db.pkg(name.as_str()) {
                     if !packages.iter().any(|p: &Package| p.name == name) {
-                        packages.push(Package::from_alpm(pkg, db.name()));
+                        packages.push(pkg.into());
                     }
                 }
             }
@@ -226,8 +229,7 @@ impl super::Manager for Pacman {
                 }
                 alpm.syncdbs()
                     .iter()
-                    .find_map(|db| db.pkg(name).ok().map(|p| (p, db.name())))
-                    .map(|(p, db)| Package::from_alpm(p, db))
+                    .find_map(|db| db.pkg(name).ok().map(|p| p.into()))
             })
             .collect();
 
@@ -237,44 +239,6 @@ impl super::Manager for Pacman {
     async fn count_updates(&self) -> Result<usize, Self::Error> {
         self.list_updates().await.map(|v| v.len())
     }
-
-    /* async fn update(&self) -> Result<(), Self::Error> {
-        let local = tokio::task::LocalSet::new();
-        let mut alpm = self.alpm.lock();
-        let syncdbs = alpm.syncdbs_mut();
-
-        syncdbs.update(false)?;
-        alpm.trans_init(alpm::TransFlag::NONE)?;
-        let result = {
-            alpm.sync_sysupgrade(false)?;
-            alpm.trans_prepare().map_err(|(_, err)| err)?;
-            let packages = alpm.trans_add();
-            if packages.is_empty() {
-                return Ok(());
-            }
-            let packages_count = packages.len();
-            self.alpm.set_packages_count(packages_count);
-            if let Some(progress_sender) = self.progress_sender.clone() {
-                local.spawn_local({
-                    let alpm = self.alpm.clone();
-                    async move {
-                        while let Some(progress) = alpm.recv_progress().await {
-                            let _ = progress_sender.send(progress).await;
-                            if progress >= 100 {
-                                break;
-                            }
-                        }
-                    }
-                });
-            }
-            alpm.trans_commit().map_err(|(_, err)| err)?;
-            Ok(())
-        };
-
-        alpm.trans_release()?;
-        // local.await;
-        result
-    } */
 
     async fn update(&self) -> Result<(), Self::Error> {
         let stdout = Command::new("pacman")
