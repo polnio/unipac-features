@@ -2,13 +2,13 @@ use super::Manager;
 use reqwest::Url;
 use semver::Version;
 use serde::Deserialize;
-use std::{
-    collections::HashMap,
-    fmt::Display,
-    process::{Command, Stdio},
-    str::FromStr,
-    sync::RwLock,
-};
+use std::collections::HashMap;
+use std::fmt::Display;
+use std::future::Future;
+use std::io::{BufRead, BufReader};
+use std::process::{Command, Stdio};
+use std::str::FromStr;
+use std::sync::RwLock;
 use tokio::sync::mpsc::Sender;
 
 pub type Error = String;
@@ -44,8 +44,8 @@ impl FromStr for PackageRepository {
 impl Display for PackageRepository {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Registry { url } => write!(f, "registry+{url}"),
-            Self::Git { url, commit } => write!(f, "git+{url}#{commit}"),
+            Self::Registry { url } => write!(f, "registry+{}", url),
+            Self::Git { url, commit } => write!(f, "git+{}#{}", url, commit),
         }
     }
 }
@@ -135,7 +135,7 @@ struct CommitResponse {
 }
 
 pub struct Cargo {
-    progress_sender: Option<Sender<u8>>,
+    progress_sender: Option<Sender<String>>,
     http_client: reqwest::Client,
     update_cache: RwLock<Option<Vec<Package>>>,
 }
@@ -143,17 +143,18 @@ impl Cargo {
     pub fn new() -> Self {
         Self::create(None)
     }
-    pub fn with_progress(progress_sender: Sender<u8>) -> Self {
+    pub fn with_progress(progress_sender: Sender<String>) -> Self {
         Self::create(Some(progress_sender))
     }
-    fn create(progress_sender: Option<Sender<u8>>) -> Self {
+    fn create(progress_sender: Option<Sender<String>>) -> Self {
+        let http_client = reqwest::Client::builder()
+            .user_agent("Unipac <https://github.com/polnio/unipac>")
+            .build()
+            .expect("Failed to create HTTP client");
         Self {
             progress_sender,
-            http_client: reqwest::Client::builder()
-                .user_agent("Unipac <https://github.com/polnio/unipac>")
-                .build()
-                .expect("Failed to create HTTP client"),
-            update_cache: None.into(),
+            http_client,
+            update_cache: RwLock::new(None),
         }
     }
 
@@ -163,6 +164,39 @@ impl Cargo {
         let file = std::fs::File::open(config_path).map_err(|_| "Failed to open config file")?;
         let config: Config = serde_json::from_reader(file).map_err(|_| "Failed to parse config")?;
         Ok(config)
+    }
+
+    async fn inner_install<F: Future, C: Fn(String) -> F>(
+        &self,
+        package: &Package,
+        progress_callback: C,
+    ) -> Result<(), Error> {
+        let stdout = Command::new("cargo")
+            .args(["install", &package.name, "--version", &package.version])
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|err| format!("Failed to install package: {}", err))?
+            .stderr
+            .ok_or("Failed to install package")?;
+
+        for line in BufReader::new(stdout).lines() {
+            let Ok(line) = line else {
+                continue;
+            };
+            let mut parts = line.split(' ');
+            while let Some(part) = parts.next() {
+                if part == "Compiling" {
+                    break;
+                }
+            }
+            let Some(name) = parts.next() else {
+                continue;
+            };
+            progress_callback(name.into()).await;
+        }
+
+        Ok(())
     }
 }
 impl Manager for Cargo {
@@ -241,14 +275,13 @@ impl Manager for Cargo {
     }
 
     async fn install(&self, package: &Self::Package) -> Result<(), Self::Error> {
-        Command::new("cargo")
-            .args(["install", &package.name, "--version", &package.version])
-            .stderr(Stdio::null())
-            .stdout(Stdio::null())
-            .spawn()
-            .and_then(|mut p| p.wait())
-            .map_err(|err| format!("Failed to install package: {err}"))?;
-        Ok(())
+        self.inner_install(package, |name| async move {
+            let Some(progress_sender) = &self.progress_sender.clone() else {
+                return;
+            };
+            let _ = progress_sender.send(format!("{}", name)).await;
+        })
+        .await
     }
 
     async fn uninstall(&self, package: &Self::Package) -> Result<(), Self::Error> {
@@ -258,7 +291,7 @@ impl Manager for Cargo {
             .stdout(Stdio::null())
             .spawn()
             .and_then(|mut p| p.wait())
-            .map_err(|err| format!("Failed to uninstall package: {err}"))?;
+            .map_err(|err| format!("Failed to uninstall package: {}", err))?;
         Ok(())
     }
 
@@ -353,20 +386,36 @@ impl Manager for Cargo {
     }
 
     async fn update(&self) -> Result<(), Self::Error> {
+        println!("cache: {}", self.update_cache.read().unwrap().is_some());
         if self.update_cache.read().unwrap().is_none() {
             self.list_updates().await?;
         }
         let packages = self.update_cache.write().unwrap().take().unwrap();
+        let length = packages.len();
         for (i, package) in packages.iter().enumerate() {
             if let Some(sender) = self.progress_sender.as_ref() {
                 let _ = sender
-                    .send((i * 100 / packages.len()).try_into().unwrap())
+                    .send(format!("{}% {}", i * 100 / packages.len(), package.name))
                     .await;
             }
-            self.install(package).await?;
+
+            self.inner_install(package, |name| async move {
+                let Some(progress_sender) = &self.progress_sender.clone() else {
+                    return;
+                };
+                let _ = progress_sender
+                    .send(format!(
+                        "{}% {} {}",
+                        i * 100 / length,
+                        package.name.clone(),
+                        name
+                    ))
+                    .await;
+            })
+            .await?;
         }
         if let Some(sender) = self.progress_sender.as_ref() {
-            let _ = sender.send(100).await;
+            let _ = sender.send("100%".into()).await;
         }
         Ok(())
     }

@@ -65,17 +65,17 @@ impl Display for Error {
 pub struct AUR {
     alpm: Arc<Alpm>,
     raur: raur::Handle,
-    progress_sender: Option<Sender<u8>>,
+    progress_sender: Option<Sender<String>>,
 }
 impl AUR {
     pub fn new() -> Self {
         Self::create(None)
     }
-    pub fn with_progress(progress_sender: Sender<u8>) -> Self {
+    pub fn with_progress(progress_sender: Sender<String>) -> Self {
         Self::create(Some(progress_sender.clone()))
     }
 
-    fn create(progress_sender: Option<Sender<u8>>) -> Self {
+    fn create(progress_sender: Option<Sender<String>>) -> Self {
         let alpm = Arc::new(Alpm::new());
         Self {
             alpm,
@@ -256,16 +256,16 @@ impl super::Manager for AUR {
 
     async fn update(&self) -> Result<(), Self::Error> {
         let updates = self.list_updates().await?;
-        if let Some(progress_sender) = &self.progress_sender {
-            let _ = progress_sender.send(0).await;
-        }
         for (i, package) in updates.iter().enumerate() {
-            self.install(package).await?;
             if let Some(progress_sender) = &self.progress_sender {
                 let _ = progress_sender
-                    .send(((i + 1) * 100 / updates.len()).try_into().unwrap())
+                    .send(format!("{}% {}", i * 100 / updates.len(), package.name))
                     .await;
             }
+            self.install(package).await?;
+        }
+        if let Some(progress_sender) = &self.progress_sender {
+            let _ = progress_sender.send("100%".into()).await;
         }
         Ok(())
     }

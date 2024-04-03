@@ -59,11 +59,6 @@ impl Spinners {
     }
 
     #[for_all_attrs]
-    pub fn __manager_set_progress(&self, p: u8) {
-        self.__manager_set_message(format!("{}%", p));
-    }
-
-    #[for_all_attrs]
     pub fn __manager_abort(&self) {
         self.__manager_finish_with_message("x")
     }

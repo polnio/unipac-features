@@ -52,7 +52,7 @@ impl FromStr for Package {
 }
 
 pub struct Flatpak {
-    progress_sender: Option<Sender<u8>>,
+    progress_sender: Option<Sender<String>>,
     update_cache: Mutex<Option<Vec<Package>>>,
 }
 impl Flatpak {
@@ -62,7 +62,7 @@ impl Flatpak {
             update_cache: None.into(),
         }
     }
-    pub fn with_progress(progress_sender: Sender<u8>) -> Self {
+    pub fn with_progress(progress_sender: Sender<String>) -> Self {
         Self {
             progress_sender: progress_sender.into(),
             update_cache: None.into(),
@@ -184,15 +184,17 @@ impl super::Manager for Flatpak {
             if !line.starts_with("Updating ") || !list.iter().any(|p| line.contains(&p.name)) {
                 continue;
             }
-            if let Some(progress_sender) = &self.progress_sender {
-                let _ = progress_sender
-                    .send((i * 100 / list.len()).try_into().unwrap())
-                    .await;
+            if let Some(package_name) = line.split(" ").nth(1) {
+                if let Some(progress_sender) = &self.progress_sender {
+                    let _ = progress_sender
+                        .send(format!("{}% {}", i * 100 / list.len(), package_name))
+                        .await;
+                }
             }
             i += 1;
         }
         if let Some(progress_sender) = &self.progress_sender {
-            let _ = progress_sender.send(100).await;
+            let _ = progress_sender.send("100%".into()).await;
         }
         Ok(())
     }

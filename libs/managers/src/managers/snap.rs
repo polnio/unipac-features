@@ -54,7 +54,7 @@ impl Snap {
     pub fn new() -> Self {
         Self {}
     }
-    pub fn with_progress(_progress_sender: Sender<u8>) -> Self {
+    pub fn with_progress(_progress_sender: Sender<String>) -> Self {
         Self {}
     }
 }

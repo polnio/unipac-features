@@ -60,18 +60,18 @@ impl Display for Error {
 
 pub struct Pacman {
     alpm: Arc<Alpm>,
-    progress_sender: Option<Sender<u8>>,
+    progress_sender: Option<Sender<String>>,
 }
 impl Pacman {
     pub fn new() -> Self {
         Self::create(None)
     }
-    pub fn with_progress(progress_sender: Sender<u8>) -> Self {
+    pub fn with_progress(progress_sender: Sender<String>) -> Self {
         let this = Self::create(Some(progress_sender));
         this
     }
 
-    fn create(progress_sender: Option<Sender<u8>>) -> Self {
+    fn create(progress_sender: Option<Sender<String>>) -> Self {
         let alpm = Arc::new(Alpm::new());
         Self {
             alpm,
@@ -268,9 +268,11 @@ impl super::Manager for Pacman {
                             0
                         });
                 } else if line.contains("upgrading") && count > 0 {
-                    let _ = progress_sender
-                        .send((i * 100 / count).try_into().unwrap())
-                        .await;
+                    if let Some(package_name) = line.split(" ").nth(1) {
+                        let _ = progress_sender
+                            .send(format!("{}% {}", i * 100 / count, package_name))
+                            .await;
+                    }
 
                     i += 1;
                 }
@@ -278,7 +280,7 @@ impl super::Manager for Pacman {
             if i < count || count == 0 {
                 return Err(Error::Alpm(None));
             }
-            let _ = progress_sender.send(100).await;
+            let _ = progress_sender.send("100%".into()).await;
         }
 
         Ok(())

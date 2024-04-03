@@ -134,7 +134,7 @@ macro_rules! execute {
                 if let Some(mut receiver) = __manager_receiver {
                     local.spawn_local(async move {
                         while let Some(progress) = receiver.recv().await {
-                            spinners_clone.__manager_set_progress(progress);
+                            spinners_clone.__manager_set_message(progress);
                         }
                     });
                 }
